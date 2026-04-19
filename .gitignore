@@ -1,23 +1,27 @@
-# 环境变量（含密码、密钥，绝不提交）
+# 环境变量
 .env
-.env.example
+.env.local
 
-# Python 缓存
+# 配置文件（含敏感信息，使用 .example 模板）
+config.yaml
+
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
 
-# 临时文件（PDF、附件）
+# 数据目录（含 PDF、临时文件）
 data/temp/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
-
-# 虚拟环境
-venv/
-.venv/

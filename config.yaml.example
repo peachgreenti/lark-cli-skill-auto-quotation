@@ -1,0 +1,87 @@
+# ============================================
+# 外贸报价全链路自动化系统 配置文件
+# ============================================
+# 使用方法：复制为 config.yaml 并填入真实配置
+# cp config.yaml.example config.yaml
+# ============================================
+
+# ---- 邮件监听配置 ----
+mail:
+  watch_folders: ["INBOX"]
+  inquiry_keywords:
+    - "询价"
+    - "报价"
+    - "quotation"
+    - "inquiry"
+    - "RFQ"
+    - "price"
+    - "报价单"
+    - "产品报价"
+    - "询盘"
+
+# ---- 飞书多维表格配置 ----
+# 需要创建三个表：询盘需求表、报价明细表、客户管理表
+# 各表的字段 ID 需要根据实际多维表格填写
+base:
+  app_token: "YOUR_BASE_APP_TOKEN"           # 多维表格 app_token（从 URL 获取）
+  inquiry_table_id: "YOUR_INQUIRY_TABLE_ID"  # 询盘需求表 ID
+  quotation_table_id: "YOUR_QUOTATION_TABLE_ID"  # 报价明细表 ID
+  customer_table_id: "YOUR_CUSTOMER_TABLE_ID"    # 客户管理表 ID
+  inquiry_fields:
+    customer: "fld_xxx"        # 客户名称
+    requirement: "fld_xxx"     # 报价需求
+    status: "fld_xxx"          # 询价状态
+    attachment: "fld_xxx"      # 询价函附件
+    query_date: "fld_xxx"      # 查询日期
+    query_time: "fld_xxx"      # 查询时间
+    salesperson: "fld_xxx"     # 业务员
+    req_number: "fld_xxx"      # 需求编号
+  quotation_fields:
+    product_name: "fld_xxx"
+    product_model: "fld_xxx"
+    quantity: "fld_xxx"
+    unit_price: "fld_xxx"
+    total_price: "fld_xxx"
+    customer_name: "fld_xxx"
+    quotation_status: "fld_xxx"
+    req_number: "fld_xxx"
+    main_requirement: "fld_xxx"
+    sub_requirement: "fld_xxx"
+
+# ---- 报价单模板配置 ----
+quotation:
+  company_name_cn: "XX科技有限公司"
+  company_address_cn: "XX省XX市XX区XX路XX号"
+  company_name_en: "XX Technology Co., Ltd."
+  company_address_en: "XX Road, XX District, XX City, XX Province, China"
+  company_phone: "+86-XXX-XXXX-XXXX"
+  company_email: "sales@xxx.com"
+  bank_name: "Bank of China, XX Branch"
+  bank_account: "XXXXXXXXXXXXXXXX"
+  bank_swift: "BKCHCNBJ"
+  validity_days: 30
+  delivery_days: 15
+  payment_terms_en: "T/T 30% deposit, 70% before shipment"
+  payment_terms_cn: "电汇 30% 订金，发货前付 70% 尾款"
+  packaging_en: "Standard export carton packing"
+  packaging_cn: "标准出口纸箱包装"
+  moq: 100
+  currency: "USD"
+
+# ---- 飞书通知配置 ----
+notify:
+  chat_id: "YOUR_CHAT_ID"           # 飞书群聊 ID
+  salesperson_id: "YOUR_USER_ID"    # 业务员用户 ID
+
+# ---- AI 配置 ----
+ai:
+  provider: "ark"
+  model: "doubao-1-5-pro-32k-250115"
+  api_key_env: "OPENAI_API_KEY"
+  base_url_env: "OPENAI_BASE_URL"
+
+# ---- 轮询配置 ----
+polling:
+  check_interval: 60
+  quotation_stable_time: 60
+  quotation_poll_interval: 30

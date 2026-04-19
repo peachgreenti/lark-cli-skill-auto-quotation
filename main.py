@@ -72,7 +72,7 @@ def wait_for_feishu_confirm(chat_id: str, prompt: str, timeout: int = 1800) -> b
     # 轮询群消息，等待用户回复
     start_time = time.time()
     poll_interval = 10  # 每 10 秒检查一次
-    start_time_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(start_time))
+    start_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
 
     while time.time() - start_time < timeout:
         time.sleep(poll_interval)
@@ -151,7 +151,7 @@ def process_inquiry(email_data: dict, parsed: dict, detected: dict, config: dict
     # ---- 阶段 ④：写入多维表格 ----
     logger.info("【阶段④】写入多维表格...")
     try:
-        # 保存 PDF 附件到临时文件
+        # 保存 PDF 附件到临时文件（如果有）
         pdf_path = None
         pdf_text = ""
         if parsed.get("pdf_attachments"):
@@ -172,24 +172,27 @@ def process_inquiry(email_data: dict, parsed: dict, detected: dict, config: dict
             except Exception as e:
                 logger.warning(f"PDF 文本提取失败: {e}")
 
-        if not pdf_path:
-            logger.error("未找到 PDF 附件，无法创建询盘记录")
-            notifier.send_error(f"未找到 PDF 附件: {parsed.get('subject', '')}")
-            return False
-
-        # AI 提取报价需求文字（从 PDF 文本中提取）
+        # AI 提取报价需求文字（优先从 PDF，其次从邮件正文）
         requirement_text = ""
         if pdf_text:
             requirement_text = detector.extract_requirement_text(pdf_text)
-            logger.info(f"AI 提取报价需求: {requirement_text}")
         elif parsed.get("body"):
-            # 如果没有 PDF，从邮件正文提取
             requirement_text = detector.extract_requirement_text(parsed["body"])
+        elif parsed.get("html_body"):
+            # 从 HTML 正文提取（去除标签）
+            import re
+            html_text = re.sub(r'<[^>]+>', '', parsed["html_body"])
+            requirement_text = detector.extract_requirement_text(html_text)
+
+        if requirement_text:
+            logger.info(f"AI 提取报价需求: {requirement_text}")
+        else:
+            logger.warning("未能从邮件中提取报价需求，将使用原始正文")
 
         # 创建询盘记录（上传附件 + 填入报价需求文字）
         result = writer.create_inquiry_record(
             pdf_path=pdf_path,
-            requirement_text=requirement_text,
+            requirement_text=requirement_text or parsed.get("body", "")[:500],
         )
         inquiry_record_id = result.get("record_id", "")
         req_number = result.get("req_number", "")
@@ -201,7 +204,9 @@ def process_inquiry(email_data: dict, parsed: dict, detected: dict, config: dict
         return False
 
     # 通知：询价已收到（含多维表格链接）
-    record_url = f"https://my.feishu.cn/base/VgB8bGECraIO4Ush1rJctNOhncb?table=tblWsxK0Tl6ProSp&view=rec{inquiry_record_id}"
+    base_app_token = config.get("base", {}).get("app_token", "")
+    inquiry_table_id = config.get("base", {}).get("inquiry_table_id", "")
+    record_url = f"https://my.feishu.cn/base/{base_app_token}?table={inquiry_table_id}&view=rec{inquiry_record_id}"
     notifier.send_inquiry_received(customer_name, parsed.get("subject", ""), record_url)
 
     # ---- 阶段 ⑤⑥：等待报价完成 ----
@@ -212,90 +217,8 @@ def process_inquiry(email_data: dict, parsed: dict, detected: dict, config: dict
         notifier.send_error(f"报价等待超时: 客户={customer_name}")
         return False
 
-    # ---- 阶段 ⑦：生成报价单（飞书云文档 + PDF） ----
-    logger.info("【阶段⑦】生成报价单...")
-    try:
-        gen_result = generator.generate(
-            quotation_records=quotation_records,
-            customer_name=customer_name,
-            language=language,
-        )
-        doc_url = gen_result["doc_url"]
-        pdf_path = gen_result["pdf_path"]
-        quotation_number = gen_result["quotation_number"]
-        total_amount = gen_result["total_amount"]
-    except Exception as e:
-        logger.error(f"生成报价单失败: {e}")
-        notifier.send_error(f"生成报价单失败: {e}")
-        return False
-
-    # ---- 阶段 ⑧：通知用户去云文档调整报价 ----
-    logger.info("【阶段⑧】通知用户调整报价单...")
-    notifier.send_quotation_ready(customer_name, doc_url, total_amount, record_url)
-
-    # 等待用户在群里确认（已调整完报价单）
-    chat_id = config.get("notify", {}).get("chat_id", "")
-    confirmed = wait_for_feishu_confirm(
-        chat_id,
-        f"**客户：** {customer_name}\n**报价金额：** {total_amount:,.2f}\n\n"
-        f"请先前往云文档调整报价内容，调整完毕后在群内回复「**确认**」继续，回复「**取消**」放弃。\n"
-        f"📄 [编辑报价单]({doc_url})",
-    )
-    if not confirmed:
-        logger.info("用户未确认或取消，跳过此询价")
-        return False
-
-    # ---- 阶段 ⑨：生成邮件预览云文档，让用户调整确认 ----
-    logger.info("【阶段⑨】生成邮件预览云文档...")
-    reply_subject = f"Re: {parsed.get('subject', '')}"
-    try:
-        reply_doc = generator.generate_reply_doc(
-            quotation_doc_url=doc_url,
-            customer_name=customer_name,
-            to_addr=parsed.get("reply_to", ""),
-            language=language,
-        )
-        reply_doc_url = reply_doc["doc_url"]
-    except Exception as e:
-        logger.error(f"生成邮件预览云文档失败: {e}")
-        notifier.send_error(f"生成邮件预览失败: {e}")
-        return False
-
-    # 通知用户去云文档调整邮件内容
-    confirmed = wait_for_feishu_confirm(
-        chat_id,
-        f"**客户：** {customer_name}\n"
-        f"**收件人：** {parsed.get('reply_to')}\n"
-        f"**主题：** {reply_subject}\n"
-        f"**附件：** {os.path.basename(pdf_path) if pdf_path else '无'}\n\n"
-        f"邮件预览已生成，请前往云文档查看并调整邮件内容：\n"
-        f"📄 [编辑邮件预览]({reply_doc_url})\n\n"
-        f"调整完毕后在群内回复「**确认**」发送邮件，回复「**取消**」放弃。",
-    )
-    if not confirmed:
-        logger.info("用户取消发送")
-        return False
-
-    # ---- 阶段 ⑩：从邮件预览云文档读取最终内容，发送邮件 ----
-    logger.info("【阶段⑩】从邮件预览云文档读取最终内容，发送邮件...")
-    reply_body = generator.generate_reply_from_doc(reply_doc_url, customer_name, language)
-
-    success = sender.send_reply(
-        to_addr=parsed.get("reply_to", ""),
-        subject=reply_subject,
-        reply_body=reply_body,
-        pdf_path=pdf_path,
-        original_message_id=parsed.get("message_id_header"),
-        references=parsed.get("references"),
-    )
-
-    if success:
-        notifier.send_reply_sent(customer_name, quotation_number)
-        logger.info(f"✅ 询价处理完成: {customer_name}, 报价编号: {quotation_number}")
-    else:
-        notifier.send_error(f"邮件发送失败: 客户={customer_name}")
-
-    return success
+    # ---- 阶段 ⑦⑧⑨⑩：生成报价单 → 用户确认 → 生成PDF → 邮件预览 → 发送 ----
+    return _process_quotation(parsed, detected, config, modules, quotation_records, inquiry_record_id)
 
 
 def run_test_mode(req_number: str, config: dict, modules: dict) -> bool:
@@ -318,7 +241,7 @@ def run_test_mode(req_number: str, config: dict, modules: dict) -> bool:
         "subject": f"询价测试 - 需求编号 {req_number}",
         "from_addr": "test@example.com",
         "from_name": "测试客户",
-        "reply_to": "565041990@qq.com",  # 测试用真实发件人
+        "reply_to": "",  # 测试模式：回复地址需手动指定
         "message_id_header": "",
         "references": "",
     }
@@ -373,7 +296,9 @@ def _process_quotation(parsed, detected, config, modules, quotation_records, inq
     # ---- 阶段 ⑧：通知用户调整报价单云文档 ----
     record_url = ""
     if inquiry_record_id:
-        record_url = f"https://my.feishu.cn/base/VgB8bGECraIO4Ush1rJctNOhncb?table=tblWsxK0Tl6ProSp&view=rec{inquiry_record_id}"
+        base_app_token = config.get("base", {}).get("app_token", "")
+        inquiry_table_id = config.get("base", {}).get("inquiry_table_id", "")
+        record_url = f"https://my.feishu.cn/base/{base_app_token}?table={inquiry_table_id}&view=rec{inquiry_record_id}"
     notifier.send_quotation_ready(customer_name, doc_url, total_amount, record_url)
 
     confirmed = wait_for_feishu_confirm(

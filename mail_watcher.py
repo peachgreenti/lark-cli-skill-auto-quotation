@@ -40,6 +40,8 @@ class MailWatcher:
             self._send_id_command()
             self.connection.login(self.imap_user, self.imap_password)
             logger.info("IMAP 连接成功")
+            # 首次连接：将当前所有未读邮件标记为已处理，避免重复处理历史邮件
+            self._mark_existing_unseen_as_processed()
             return True
         except imaplib.IMAP4.error as e:
             logger.error(f"IMAP 登录失败: {e}")
@@ -47,6 +49,29 @@ class MailWatcher:
         except Exception as e:
             logger.error(f"IMAP 连接失败: {e}")
             return False
+
+    def _mark_existing_unseen_as_processed(self) -> None:
+        """首次连接时，将当前所有未读邮件 UID 加入已处理集合（跳过历史邮件）"""
+        if self.processed_uids:
+            return  # 已经初始化过，跳过
+        try:
+            for folder in self.watch_folders:
+                status, _ = self.connection.select(folder, readonly=False)
+                if status != "OK":
+                    continue
+                status, data = self.connection.uid("search", None, "UNSEEN")
+                if status == "OK" and data[0]:
+                    existing_uids = data[0].split()
+                    count = 0
+                    for uid in existing_uids:
+                        uid_str = uid.decode()
+                        self.processed_uids.add(uid_str)
+                        count += 1
+                    if count > 0:
+                        logger.info(f"  📋 跳过 {folder} 中 {count} 封历史未读邮件（仅处理后续新邮件）")
+                self.connection.close()
+        except Exception as e:
+            logger.warning(f"标记历史未读邮件失败（非致命）: {e}")
 
     def disconnect(self) -> None:
         """断开 IMAP 连接"""
@@ -137,7 +162,7 @@ class MailWatcher:
             list[dict]: 新邮件列表
         """
         try:
-            status, _ = self.connection.select(folder, readonly=True)
+            status, _ = self.connection.select(folder, readonly=False)
             if status != "OK":
                 logger.warning(f"无法选择文件夹: {folder}")
                 return []
