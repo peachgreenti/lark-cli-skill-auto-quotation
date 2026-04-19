@@ -1,0 +1,90 @@
+# ============================================
+# 外贸报价全链路自动化系统 配置文件
+# ============================================
+
+# ---- 邮件监听配置 ----
+mail:
+  watch_folders: ["INBOX"]
+  # 询价邮件识别关键词（邮件标题或正文包含这些词则判定为询价）
+  inquiry_keywords:
+    - "询价"
+    - "报价"
+    - "quotation"
+    - "inquiry"
+    - "RFQ"
+    - "price"
+    - "报价单"
+    - "产品报价"
+    - "询盘"
+
+# ---- 飞书多维表格配置 ----
+base:
+  app_token: "VgB8bGECraIO4Ush1rJctNOhncb"
+  inquiry_table_id: "tblWsxK0Tl6ProSp"    # 询盘需求表
+  quotation_table_id: "tblTcstKVzxkhcGB"   # 报价明细表（存储报价结果）
+  customer_table_id: "tbl0UHexoGwNpTyt"    # 客户管理表
+  # 询盘需求表字段映射
+  inquiry_fields:
+    customer: "fldgrNbTnQ"       # 客户名称（关联选择字段）
+    requirement: "fldLYihHyq"    # 报价需求（文本）
+    status: "flds9zibsi"         # 询价状态（单选：调整/准备中、待客户确认、客户已接受、客户已拒绝）
+    attachment: "fld8kbT6o1"     # 询价函附件
+    query_date: "fld1QCOXYT"     # 查询日期（日期）
+    query_time: "fldvDiKseN"     # 查询时间（日期时间）
+    salesperson: "fldHcWiD8g"    # 业务员（人员）
+    req_number: "fldFvm5QQe"     # 需求编号（自动编号，只读）
+  # 报价明细表关键字段
+  quotation_fields:
+    product_name: "fldhSwvJ3z"       # 产品名称（查找自产品管理）
+    product_model: "fldyHWDpBj"      # 产品型号（文本）
+    quantity: "fldCAUopQE"            # 数量（数字）
+    unit_price: "fldQpjwnHO"         # 产品售价/元（查找自产品管理）
+    total_price: "fld8GjmjQV"        # 总价/元（公式，只读）
+    customer_name: "fldZQkyIIZ"      # 客户名称（查找自询盘需求表）
+    quotation_status: "fld4CII0Cl"   # 报价状态（查找自询盘需求表）
+    req_number: "fldHfNxmRA"         # 需求编号（文本）
+    main_requirement: "fld6XsOCGr"   # 主报价需求（文本）
+    sub_requirement: "fld7JceqdM"    # 子报价需求（文本）
+
+# ---- 报价单模板配置 ----
+quotation:
+  # 公司信息（中文）
+  company_name_cn: "XX科技有限公司"
+  company_address_cn: "XX省XX市XX区XX路XX号"
+  # 公司信息（英文）
+  company_name_en: "XX Technology Co., Ltd."
+  company_address_en: "XX Road, XX District, XX City, XX Province, China"
+  # 联系方式
+  company_phone: "+86-XXX-XXXX-XXXX"
+  company_email: "sales@xxx.com"
+  # 银行信息
+  bank_name: "Bank of China, XX Branch"
+  bank_account: "XXXXXXXXXXXXXXXX"
+  bank_swift: "BKCHCNBJ"
+  # 报价条款
+  validity_days: 30
+  delivery_days: 15
+  payment_terms_en: "T/T 30% deposit, 70% before shipment"
+  payment_terms_cn: "电汇 30% 订金，发货前付 70% 尾款"
+  packaging_en: "Standard export carton packing"
+  packaging_cn: "标准出口纸箱包装"
+  moq: 100
+  currency: "USD"
+
+# ---- 飞书通知配置 ----
+notify:
+  chat_id: "oc_0fbad9383486e3e43300f2daee013845"  # 机器人功能体验群
+  salesperson_id: "ou_761c5ac47183b384c95cdbcb24429210"  # 庄金旭
+
+# ---- AI 配置 ----
+ai:
+  provider: "ark"                # openai / deepseek / ark
+  model: "doubao-1-5-pro-32k-250115"
+  api_key_env: "OPENAI_API_KEY"
+  base_url_env: "OPENAI_BASE_URL"
+
+# ---- 轮询配置 ----
+polling:
+  check_interval: 60             # 邮件检查间隔（秒）
+  quotation_stable_time: 60      # 报价结果稳定时间（秒）
+  quotation_poll_interval: 30    # 报价轮询间隔（秒）

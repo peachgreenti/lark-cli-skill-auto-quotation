@@ -1,0 +1,23 @@
+# 环境变量（含密码、密钥，绝不提交）
+.env
+.env.example
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 临时文件（PDF、附件）
+data/temp/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 虚拟环境
+venv/
+.venv/
